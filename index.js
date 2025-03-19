@@ -8,11 +8,18 @@ const token = process.env.TOKEN;
 const link = process.env.LINK;
 const channel = process.env.CHANNEL;
 const admin = process.env.ADMIN;
-const bot = new TelegramBot(token);
+const bot = new TelegramBot(token, { polling: true });
 
 const DATA_FILE = "prevData.json";
 let messageQueue = [];
 let isProcessing = false;
+const states = [];
+const commands = {
+  add: "/add",
+  del: "/del",
+  show: "/show",
+  clear: "/clear",
+};
 
 const loadPrevData = () => {
   try {
@@ -64,6 +71,16 @@ const getData = async () => {
           message += `\n*Stop ${index + 1}:* ${stop.address}`;
         });
 
+        for (let state of states) {
+          if (load.origin_location_state.toLowerCase() == state.toLowerCase()) {
+            setTimeout(async () => {
+              bot.sendMessage(admin, message, {
+                parse_mode: "Markdown",
+              });
+            }, 70);
+          }
+        }
+
         messageQueue.push(message);
       })
     );
@@ -81,12 +98,15 @@ const processQueue = async () => {
   isProcessing = true;
 
   while (messageQueue.length > 0) {
-    const message = messageQueue.shift();
+    const message = messageQueue[0];
     try {
-      await bot.sendMessage(channel, message, {
-        parse_mode: "Markdown",
-      });
-      await new Promise((resolve) => setTimeout(resolve, 50)); // Rate limiting (≈28 msgs/sec)
+      setTimeout(async () => {
+        await bot.sendMessage(channel, message, {
+          parse_mode: "Markdown",
+        });
+      }, 100);
+
+      messageQueue.shift();
     } catch (error) {
       console.error("Error sending message:", error.message);
       notify(error.message);
@@ -100,11 +120,51 @@ const notify = (message) => {
   bot.sendMessage(admin, message);
 };
 
+bot.on("text", (ctx) => {
+  try {
+    if (ctx.from.id == admin) {
+      const command = ctx.text.split(" ")[0];
+      let state;
+
+      switch (command) {
+        case commands.add:
+          state = ctx.text.split(" ")[1];
+          if (!state) {
+            notify("Invalid!");
+            break;
+          }
+          states.push(state);
+          notify(states.toString());
+          break;
+        case commands.del:
+          state = ctx.text.split(" ")[1];
+          if (!state) {
+            notify("Invalid!");
+            break;
+          }
+          states = states.filter((st) => st != state);
+          notify(states.toLocaleString());
+          break;
+        case commands.show:
+          notify(states.toLocaleString() || "Empty");
+          break;
+        case commands.clear:
+          states = [];
+          notify(states.toLocaleString() || "Empty");
+        default:
+          notify("Command not recognized!");
+          break;
+      }
+    }
+  } catch (error) {
+    notify(error.message);
+  }
+});
+
 const start = () => {
   notify("Start");
-  console.log("Start");
   getData();
-  setInterval(getData, 1000 * 20);
+  setInterval(getData, 1000 * 25);
 };
 
 start();
