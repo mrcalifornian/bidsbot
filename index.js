@@ -13,7 +13,7 @@ const bot = new TelegramBot(token, { polling: true });
 const DATA_FILE = "prevData.json";
 let messageQueue = [];
 let isProcessing = false;
-const states = [];
+let states = [];
 const commands = {
   add: "/add",
   del: "/del",
